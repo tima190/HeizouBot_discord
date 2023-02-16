@@ -37,6 +37,10 @@ async def on_message(message):
     if message.content.startswith('!hug'):
         await message.channel.send(f"hugs {message.author.mention}")
 
+    if message.content.startswith('random'):
+        rand = random.randint(1,100)
+        await message.channel.send(f"ok, is {rand}")
+
 
 client.run(str(token2))
 
