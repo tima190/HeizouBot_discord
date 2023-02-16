@@ -2,7 +2,7 @@
 
 <h2 align="center">Heizou bot for discord :0 </h2>
 
- <h2>contact with me:</h2> <img src="https://img.shields.io/static/v1?url=https://t.me/grechka_GKlabel=telegram&message=@grechka_GK&color=blue&style=plastic&logo=telegram" align="center" alt="heizou lol">
+ <h2>contact with me:</h2> <img src="https://img.shields.io/static/v1?label=telegram&message=@grechka_GK&color=blue&style=plastic&logo=telegram" align="center" alt="heizou lol">
 
 <img src="https://img.shields.io/static/v1?label=discord&message=GrechkaGK+7245&color=8847b3&style=plastic&logo=discord" align="center" alt="heizou lol">
 
