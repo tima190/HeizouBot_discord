@@ -12,3 +12,11 @@
 
 <img src="https://i.pinimg.com/564x/d2/f1/a6/d2f1a664e6085f90e911d263864b1fd2.jpg" align="center" alt="heizou lol">
 
+
+---
+
+<h1 align="center">install </h2>
+
+<h2>you need isntall: </h2>
+
+discord.py
