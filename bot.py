@@ -1,4 +1,5 @@
 import discord
+from discord import ChannelType, Embed, Member, Object
 from discord.ext import commands, tasks
 from itertools import cycle
 import random
@@ -7,6 +8,13 @@ import asyncio
 import math
 import sqlite3
 import os
+import re
+from discord.utils import get
+import schedule    
+import time
+import uuid
+
+"""os.startfile(r"clear.py")"""
 
 
 description = '''XD'''
@@ -15,7 +23,7 @@ intents = discord.Intents.default()
 intents.members = True
 intents.message_content = True
 
-bot = commands.Bot(command_prefix='?',activity = (discord.Game("nothing")), description=description, intents=intents)
+bot = commands.Bot(command_prefix='?',activity = (discord.Game("nothing")),help_command=None, intents=intents)
 
 
 
@@ -68,14 +76,20 @@ async def on_ready():
     async with bot.db.cursor() as cursor:
      await cursor.execute("CREATE TABLE IF NOT EXISTS level (user INTEGER, level INTEGER, xp INTEGER, guild INTEGER)")
      await cursor.execute("CREATE TABLE IF NOT EXISTS economy (user INTEGER, money INTEGER, ticket INTEGER, guild INTEGER)")
-     await bot.db.commit()
+     await cursor.execute('CREATE TABLE IF NOT EXISTS daily (user INTEGER, ch INTEGER, coun INTEGER, guild INTEGER)')
+     await cursor.execute('CREATE TABLE IF NOT EXISTS clan (id TEXT, name TEXT, desc TEXT, level INTEGER, xp INTEGER, prit INTEGER, guild INTEGER)')
+     await cursor.execute('CREATE TABLE IF NOT EXISTS userclan (id INTEGER, user INTEGER, guild INTEGER)')
+
 
 @bot.listen('on_message')
-async def on_massage(massage):
-    if massage.author.bot:
+async def on_massage(message):
+    token3 = 0
+    if message.author.bot:
         return
-    author = massage.author
-    guild = massage.guild
+    author = message.author
+    if message.content.startswith("?"):
+        return
+    guild = message.guild
     async with bot.db.cursor() as cursor:
 
         await cursor.execute("SELECT xp FROM level WHERE user = ? AND guild = ?", (author.id, guild.id))
@@ -89,133 +103,286 @@ async def on_massage(massage):
             await cursor.execute("SELECT level FROM level WHERE user = ? AND guild = ?", (author.id, guild.id))
             level = await cursor.fetchone()
 
+        #economy
+
+        await cursor.execute("SELECT money FROM economy WHERE user = ? AND guild = ?", (author.id, guild.id))
+        money = await cursor.fetchone()
+        await cursor.execute("SELECT ticket FROM economy WHERE user = ? AND guild = ?", (author.id, guild.id))
+        ticket = await cursor.fetchone()
+        if money == None and ticket == None:
+            await cursor.execute("INSERT INTO economy (user,guild,money,ticket) VALUES (?, ?, ?, ?)",(author.id,guild.id,0,0))
+            await cursor.execute("SELECT money FROM economy WHERE user = ? AND guild = ?", (author.id, guild.id))
+            money = await cursor.fetchone()
+            await cursor.execute("SELECT ticket FROM economy WHERE user = ? AND guild = ?", (author.id, guild.id))
+            ticket = await cursor.fetchone()
+
         xpp = xp[0]
-        print(xpp)
+
         levell = level[0]
-        print(levell)
+
+        moneyy = money[0]
+
+        tickett = ticket[0]
+
         
         xpp += random.randint(1,5)
 
-        needlvl = levell*30
+        needlvl = (20+(10*levell))
+        print(needlvl)
 
         if xpp >= needlvl:
             xpp = xpp - needlvl
+            moneyy += 15*levell
             levell += 1
+
+        if random.randint(1,2) == 1:
+            moneyy += random.randint(20,50)
+
+        if random.randint(1,20) == 1:  
+            tickett += 1
+            await message.add_reaction("🈵")
+            token3 += 1
+    
+            """await massage.(f"учасник {massage.author.mention} достиг {levell} уровня!")"""
         await cursor.execute("UPDATE level SET xp =? WHERE user = ? AND guild = ?", (xpp, author.id, guild.id))
         await cursor.execute("UPDATE level SET level =? WHERE user = ? AND guild = ?", (levell, author.id, guild.id))
+        await cursor.execute("UPDATE economy SET money =? WHERE user = ? AND guild = ?", (moneyy, author.id, guild.id))
+        await cursor.execute("UPDATE economy SET ticket =? WHERE user = ? AND guild = ?", (tickett, author.id, guild.id))
         await bot.db.commit()
-        print(f"MASSAGE -" + bcolors.HEADER + f" {massage.content}" + bcolors.ENDC + f", created by {author}, xp = {xpp} , level = {levell}")
+        print(f"MASSAGE -" + bcolors.HEADER + f" {message.content}" + bcolors.ENDC + f", created by {author}, xp = {xpp} , level = {levell}")
         await cursor.execute("SELECT * FROM level")
-        print(await cursor.fetchall())
+        print(author.id)
+        if token3 == 1:
+            print(bcolors.OKGREEN + "token gived!" + bcolors.ENDC)
 
 @bot.command()
-async def profile(ctx, member: discord.member = None):
+async def profile(ctx, member: Member = None):
     if member is None:
         member = ctx.author
+    
     async with bot.db.cursor() as cursor:
         await cursor.execute("SELECT xp FROM level WHERE user = ? AND guild = ?", (member.id, ctx.guild.id))
         xp = await cursor.fetchone()
         await cursor.execute("SELECT level FROM level WHERE user = ? AND guild = ?", (member.id, ctx.guild.id))
         level = await cursor.fetchone()
+        await cursor.execute("SELECT money FROM economy WHERE user = ? AND guild = ?", (member.id, ctx.guild.id))
+        money = await cursor.fetchone()
+        await cursor.execute("SELECT ticket FROM economy WHERE user = ? AND guild = ?", (member.id, ctx.guild.id))
+        ticket = await cursor.fetchone()
+
+        if money == None and ticket == None:
+            await cursor.execute("INSERT INTO economy (user,guild,money,ticket) VALUES (?, ?, ?, ?)",(member.id, ctx.guild.id,0,0))
+            await cursor.execute("SELECT money FROM economy WHERE user = ? AND guild = ?", (member.id, ctx.guild.id))
+            money = await cursor.fetchone()
+            await cursor.execute("SELECT ticket FROM economy WHERE user = ? AND guild = ?", (member.id, ctx.guild.id))
+            ticket = await cursor.fetchone()
 
         xpp = xp[0]
         levell = level[0]
+        moneyy = money[0]
+        tickett = ticket[0]
 
-        em = discord.Embed(title=f"{member}", description=f"level = `{levell}`\n XP = `{xpp} / {levell*30}`")
+        print(xpp,levell,moneyy,tickett)
+
+        ranked = None
+
+        for rank in range (0,7):
+            if rank == round(levell//10):
+                if rank == 0:
+                    ranked  = "https://i.ibb.co/Ss3f7DT/Seasonal-Rank1-1.png"
+                if rank == 1:
+                    ranked  = "https://i.ibb.co/4fL4JbX/Seasonal-Rank2-2.png"
+                if rank == 2:
+                    ranked  = "https://i.ibb.co/RD3Whj3/Seasonal-Rank3-3.png"
+                if rank == 3:
+                    ranked  = "https://i.ibb.co/dWhkNgN/Seasonal-Rank4-4.png"
+                if rank == 4:
+                    ranked  = "https://i.ibb.co/L8yqZ2F/Seasonal-Rank5-5.png"
+                if rank == 5:
+                    ranked  = "https://i.ibb.co/41ZZFFk/Seasonal-Rank6-5.png"
+                if rank >= 6:
+                    ranked  = "https://i.ibb.co/x6ZQ3qd/Seasonal-Rank7-5.png"
+
+        em = discord.Embed(title=f"{member}", description=f"level = `{levell}`\n XP = `{xpp} / {20+(10*levell)}`\nzephyr = `{moneyy}`\nticket = `{tickett}`")
+        em.set_thumbnail(url=ranked)
         await ctx.send(embed=em)
 
-"""@bot.command()
-async def cleardb(ctx, id:int):
-    async with bot.db.cursor() as cursor:
-        await cursor.execute("DELETE FROM level WHERE user = ?", (int(id)))
-        print(id)
-        await bot.db.commit()
-    print(f"{id} - был удалён из базы")"""
-"""@bot.listen('on_message')
-async def on_massage(massage):
-    if massage.author.bot:
-        return
-    author = massage.author
-    guild = massage.guild
-    print("massage")
-    async with bot.db.cursor() as cursor:
-        await cursor.execute("SELECT xp FROM levels WHERE user = ? AND guild = ?", (author.id, guild.id))
-        xp = await cursor.fetchone()
-        await cursor.execute("SELECT level FROM levels WHERE user = ? AND guild = ?", (author.id, guild.id))
-        level = await cursor.fetchone()
-
-        if not xp or not level:
-            await cursor.execute("INSERT INTO levels (level,xp,user,coin,gem,guild) VALUES (?, ?, ?, ?, ?, ?)",(1, 0, author.id, 0, 0, guild.id))
-
-        try:
-            xp = xp[0]
-            level = level[0]
-        except TypeError:
-            xp = 0
-            level = 0
-        
-        xp += random.randint(1,5)
-        await cursor.execute("UPDATE levels SET xp = ? WHERE user = ? AND guild = ?", (xp, author.id, guild.id))
-        print(f"massage by {author} - {massage.content} - xp = {xp}, level = {level}")
-        demand = 10 + (level*30)
-        if xp > demand:
-            xp = xp - demand
-            level += 1
-            await cursor.execute("UPDATE levels SET level = ? WHERE user = ? AND guild = ?", (level, author.id, guild.id))
-            await cursor.execute("UPDATE levels SET xp = ? WHERE user = ? AND guild = ?", (xp, author.id, guild.id))"""
-
-
-
-
-        
+@bot.command()
+async def guild_create(ctx, name):
+    author = ctx.author
+    guild = ctx.guild
+    uui = (str(uuid.uuid4()))
+    print(type(uui))
+    print(uui)
+    await cursor.execute("SELECT money FROM economy WHERE user = ? AND guild = ?", (author.id, guild.id))
+    money = await cursor.fetchone()
+    money = money[0]
+    if money > 20000:
+        money -= 20000
+    
     
 
-@bot.command()
-async def add(ctx, left: int, right: int):
-    """Adds two numbers together."""
-    await ctx.send(left + right)
 
 
 @bot.command()
-async def roll(ctx, dice: str):
-    """Rolls a dice in NdN format."""
-    try:
-        rolls, limit = map(int, dice.split('d'))
-    except Exception:
-        await ctx.send('Format has to be in NdN!')
-        return
-
-    result = ', '.join(str(random.randint(1, limit)) for r in range(rolls))
-    await ctx.send(result)
-
-
-@bot.command(description='For when you wanna settle the score some other way')
-async def choose(ctx, *choices: str):
-    """Chooses between multiple choices."""
-    await ctx.send(random.choice(choices))
-
+async def testing(ctx, args, args2):
+    await ctx.send(f"1 часть - {args}, 2 часть - {args2}")
+    uui = (str(uuid.uuid4()))
+    print(type(uui))
+    print(uui)
 
 @bot.command()
-async def repeat(ctx, times: int, content='repeating...'):
-    """Repeats a message multiple times."""
-    for i in range(times):
-        await ctx.send(content)
+@commands.cooldown(1, 60*60*12, commands.BucketType.user)
+async def daily(ctx):
+    dailym = 0
+    author = ctx.author
+    guild = ctx.guild
+    money = 0
+    async with bot.db.cursor() as cursor:
+        await bot.db.commit()
+        await cursor.execute("SELECT ch FROM daily WHERE user = ? AND guild = ?", (author.id, ctx.guild.id))
+        check = await cursor.fetchone()
+        await cursor.execute("SELECT coun FROM daily WHERE user = ? AND guild = ?", (author.id, ctx.guild.id))
+        count1 = await cursor.fetchone()
+        await cursor.execute("SELECT money FROM economy WHERE user = ? AND guild = ?", (author.id, ctx.guild.id))
+        money = await cursor.fetchone()
+        if check == None or count1 == None:
+            await cursor.execute("INSERT INTO daily (user,guild,ch,coun) VALUES (?, ?, ?, ?)",(author.id,guild.id,1,0))
+            await cursor.execute("SELECT ch FROM daily WHERE user = ? AND guild = ?", (author.id, ctx.guild.id))
+            check = await cursor.fetchone()
+            await cursor.execute("SELECT coun FROM daily WHERE user = ? AND guild = ?", (author.id, ctx.guild.id))
+            count1 = await cursor.fetchone()
+        checkk = check[0]
+        count2 = count1[0]
+        moneyy = money[0]
+        print(count2)
+        if dailym == 0:
+           checkk = 0
+           count2 += 1
+           dailym = random.randint(200,400)
+           money = moneyy + dailym
+           embed=discord.Embed(title="Ежедневная награда", description="вы получили ежедневную награду!", color=0x00ff40)
+           embed.set_thumbnail(url="https://i.ibb.co/PtQCBDX/1052717040403763242.png")
+           embed.add_field(name=f"{dailym} зефирки", value=f"{count2} раз вы использовали команду", inline=True)
+           embed.set_footer(text="через 12 часов вы сможете использовать ещё раз")
+           await ctx.send(embed=embed)
 
+           await cursor.execute("UPDATE daily SET ch =? WHERE user = ? AND guild = ?", (checkk, author.id, guild.id))
+           await cursor.execute("UPDATE daily SET coun =? WHERE user = ? AND guild = ?", (count2, author.id, guild.id))
+           await cursor.execute("UPDATE economy SET money =? WHERE user = ? AND guild = ?", (money, author.id, guild.id))
+           await bot.db.commit()
+           print(checkk)
+           print(count2)
+
+
+@bot.event
+async def on_command_error(ctx, error):
+    if isinstance(error, commands.CommandNotFound):
+        await ctx.message.delete()
+        await ctx.send(f"такой команды нету 😏")
+        await asyncio.sleep(1)
+        delete = await ctx.channel.purge(limit=1)
+    if isinstance(error, commands.CommandOnCooldown):
+        cd = round(error.retry_after)
+        hours = str(cd // 3600)
+        minutes = str(cd % 60)
+        await ctx.send(f"у вас кулдаун, отдохните) \nподождите {hours} часов и {minutes} минут")
+    
+@bot.command()
+async def cleard(ctx):
+    if get(ctx.author.roles, id=1000443041762512896):
+        async with bot.db.cursor() as cursor:
+            await cursor.execute("UPDATE daily SET ch =1")
+            await bot.db.commit()
+            await ctx.send("daily сброшены")
+        
 
 @bot.command()
-async def joined(ctx, member: discord.Member):
-    """Says when a member joined."""
-    await ctx.send(f'{member.name} joined {discord.utils.format_dt(member.joined_at)}')
+async def topz(ctx):
+    A = None
+    B = None
+    X = [0]*5
+    countmembers = 0
+    async with bot.db.cursor() as cursor:
+      await cursor.execute("SELECT money FROM economy ORDER BY money DESC")
+      A = await cursor.fetchall()
+      chars = [')', '(', ',']
+      await cursor.execute("SELECT user FROM economy ORDER BY money DESC")
+      B = await cursor.fetchall()
+ 
+      for guild in bot.guilds:
+         for member in guild.members:
+          countmembers += 1
+      for i in range (5):
+          X[i] = A[i]
+          X[i] = str(X[i])
+          X[i] = re.sub('[(),]', '', X[i])
+      for i in range (5):
+          B[i] = str(B[i])
+          B[i] = re.sub('[(),]', '', B[i])
+          B[i] = int(B[i])
+          B[i] = await bot.fetch_user(B[i])
+      await ctx.send(f"top of zepfyr\n1.{X[0]}, {B[0]}\n2.{X[1]}, {B[1]}\n3.{X[2]}, {B[2]}\n4.{X[3]}, {B[3]}\n5.{X[4]}, {B[4]}\n \nколичество участников на сервере = {countmembers}")
 
+      
+      em = discord.Embed(
+          title="top",
+          description="of zephyr"
+          )
+      """em = Embed.add_field"""
+      print(countmembers)
+    
+@bot.command()
+async def topl(ctx):
+    A = None
+    B = None
+    X = [0]*5
+    countmembers = 0
+    async with bot.db.cursor() as cursor:
+      await cursor.execute("SELECT level FROM level ORDER BY level DESC")
+      A = await cursor.fetchall()
+      chars = [')', '(', ',']
+      await cursor.execute("SELECT user FROM level ORDER BY level DESC")
+      B = await cursor.fetchall()
+ 
+      for guild in bot.guilds:
+         for member in guild.members:
+          countmembers += 1
+      for i in range (5):
+          X[i] = A[i]
+          X[i] = str(X[i])
+          X[i] = re.sub('[(),]', '', X[i])
+      for i in range (5):
+          B[i] = str(B[i])
+          B[i] = re.sub('[(),]', '', B[i])
+          B[i] = int(B[i])
+          B[i] = await bot.fetch_user(B[i]) 
+      await ctx.send(f"top of zepfyr\n1.{X[0]}, {B[0]}\n2.{X[1]}, {B[1]}\n3.{X[2]}, {B[2]}\n4.{X[3]}, {B[3]}\n5.{X[4]}, {B[4]}\n \nколичество участников на сервере = {countmembers}")
 
-@bot.group()
-async def cool(ctx):
-    """Says if a user is cool.
-    In reality this just checks if a subcommand is being invoked.
-    """
-    if ctx.invoked_subcommand is None:
-        await ctx.send(f'No, {ctx.subcommand_passed} is not cool')
+      em = discord.Embed(
+          title="top",
+          description="of zephyr"
+          )
+      """em = Embed.add_field"""
+      print(countmembers)
 
+@bot.command(aliases=['Ban'])
+async def ban(ctx, member: Member=None, *, reason=None):
+    print(member)
+    print(reason)
+    if get(ctx.author.roles, id=1038682492137377844):
+        if member is None:
+            await ctx.send(f"укажите негодяя, которого забанить")
+        else:
+            if reason != None:
+             await ctx.guild.ban(member)
+             await ctx.send(f"{member.mention} отправился в азкаБАН НА ВЕКИ ВЕЧНЫЕ\nзабанил - {ctx.author.mention}\nпричина - ```{reason}```")  
+            if reason is None:
+             await ctx.guild.bam(member)
+             await ctx.send(f"{member.mention} отправился в азкаБАН НА ВЕКИ ВЕЧНЫЕ\nзабанил - {ctx.author.mention}")  
+        
+    else:
+        await ctx.send(f"у вас нет прав на бан участников")
 
 
 
