@@ -16,7 +16,7 @@ import uuid
 import requests
 import json
 
-"""os.startfile(r"clear.py")"""
+
 
 
 description = '''XD'''
